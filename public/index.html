@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>OpenSea Item Events</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Eventos de Itens da OpenSea</h1>
+  <div id="listings"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    socket.on('itemEvent', (event) => {
+      const listingsContainer = document.getElementById("listings");
+      const listItem = document.createElement("div");
+
+      const eventDateUTC = new Date(event.event_timestamp || event.payload.listing_date);
+      const offset = -3; // GMT-3
+      const eventDateLocal = new Date(eventDateUTC.getTime() + offset * 60 * 60 * 1000);
+      const day = eventDateLocal.getDate().toString().padStart(2, '0');
+      const month = (eventDateLocal.getMonth() + 1).toString().padStart(2, '0');
+      const year = eventDateLocal.getFullYear().toString().slice(-2);
+      const hours = eventDateLocal.getHours().toString().padStart(2, '0');
+      const minutes = eventDateLocal.getMinutes().toString().padStart(2, '0');
+
+      let priceInfo = '';
+      if (event.payload && event.payload.base_price && event.payload.payment_token) {
+        const basePrice = event.payload.base_price;
+        const decimals = event.payload.payment_token.decimals;
+        const priceInUSD = basePrice / Math.pow(10, decimals);
+        priceInfo = `<p>Preço: $${priceInUSD.toFixed(2)} ${event.payload.payment_token.symbol}</p>`;
+
+        if (event.precoMedio) {
+          const diferencaPercentual = ((event.precoMedio - priceInUSD) / event.precoMedio) * 100;
+          priceInfo += `<p>Preço Médio: $${event.precoMedio.toFixed(2)}</p>`;
+          priceInfo += `<p>Diferença: ${diferencaPercentual.toFixed(2)}%</p>`;
+        }
+      }
+
+      // Estilizar o item com base no destaque
+      if (event.destaque) {
+        listItem.style.border = '3px solid darkgreen';
+        listItem.style.backgroundColor = 'lightyellow';
+      }
+
+      listItem.innerHTML = `
+        <h2><span class="etiqueta" style="background-color: ${event.corEtiqueta};">${event.eventType}</span> - ${event.payload.item.metadata.name}</h2>
+        <img src="${event.payload.item.metadata.image_url}" alt="Item Image" width="200">
+        ${priceInfo}
+        <p>Data do evento: ${day}/${month}/${year} às ${hours}:${minutes}</p>
+        <a href="${event.payload.item.permalink}" target="_blank">Ver no OpenSea</a>
+      `;
+      listingsContainer.appendChild(listItem);
+    });
+  </script>
+</body>
+</html>
