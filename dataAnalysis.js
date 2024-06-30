@@ -1,33 +1,50 @@
-const sqlite3 = require('sqlite3').verbose();
-const db = new sqlite3.Database('./nft_data.db'); 
+const { connect } = require('./db');
 
-// Função para inserir um evento no banco de dados
-function inserirEvento(event) {
-  const { slug, base_price, payment_token } = event.payload;
-  const decimals = payment_token ? payment_token.decimals : 0;
-
-  db.run('INSERT INTO nft_events (slug, event_type, base_price, payment_token_decimals) VALUES (?, ?, ?, ?)', [
-    slug,
-    event.eventType,
-    base_price,
-    decimals
-  ]);
+// Função para extrair o ID do NFT a partir da URL do OpenSea
+function extrairNftId(permalink) {
+  if (permalink) {
+    const partes = permalink.split('/');
+    return partes[partes.length - 1];
+  }
+  return null;
 }
 
-// Função para calcular o preço médio de um tipo de evento em uma coleção
-async function calcularPrecoMedio(slug, eventType) {
-  return new Promise((resolve, reject) => {
-    db.all('SELECT base_price, payment_token_decimals FROM nft_events WHERE slug = ? AND event_type = ? ORDER BY timestamp DESC LIMIT 50', [slug, eventType], (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        const precos = rows.map(row => row.base_price / 10 ** row.payment_token_decimals);
-        const soma = precos.reduce((acc, preco) => acc + preco, 0);
-        const media = soma / precos.length;
-        resolve(media);
-      }
-    });
+async function inserirEvento(event) {
+  const db = await connect();
+  await db.collection('nft_events').insertOne({
+    event_data: event, // Armazena o evento completo
+    created_at: new Date(),
   });
+}
+
+async function calcularPrecoMedio(slug, eventType, nft_id) {
+  const db = await connect();
+  const pipeline = [
+    { 
+      $match: { 
+        "event_data.payload.collection.slug": slug,
+        "event_data.event_type": eventType,
+        "event_data.payload.item.nft_id": nft_id 
+      }
+    },
+    { $sort: { created_at: -1 } },
+    { $limit: 50 },
+    {
+      $group: {
+        _id: null,
+        media: { 
+          $avg: { 
+            $divide: [
+              "$event_data.payload.base_price", 
+              { $pow: [10, "$event_data.payload.payment_token.decimals"] }
+            ] 
+          }
+        },
+      }
+    }
+  ];
+  const result = await db.collection('nft_events').aggregate(pipeline).toArray();
+  return result.length > 0 ? result[0].media : null;
 }
 
 module.exports = { inserirEvento, calcularPrecoMedio };

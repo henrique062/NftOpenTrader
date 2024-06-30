@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Eventos do NFT</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Eventos do NFT</h1>
+
+  <label for="nftIdInput">NFT ID:</label>
+  <input type="text" id="nftIdInput">
+  <button onclick="buscarEventos()">Buscar Eventos</button>
+
+  <div id="eventList"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const eventList = document.getElementById('eventList');
+
+    async function buscarEventos() {
+      const nftId = document.getElementById('nftIdInput').value;
+      const response = await fetch(`/eventos/${nftId}`);
+      const eventos = await response.json();
+
+      eventList.innerHTML = ''; // Limpa a lista anterior
+
+      const table = document.createElement('table');
+      const headerRow = table.insertRow();
+      headerRow.innerHTML = `<th>Evento</th><th>Preço</th><th>Preço Médio</th><th>Data</th>`;
+
+      for (const evento of eventos) {
+        const row = table.insertRow();
+        const preco = evento.base_price / Math.pow(10, evento.payment_token_decimals);
+        row.innerHTML = `
+          <td>${evento.event_type}</td>
+          <td>$${preco.toFixed(2)} ${evento.payment_token_symbol}</td>
+          <td>${evento.preco_medio ? `$${evento.preco_medio.toFixed(2)}` : '-'}</td>
+          <td>${new Date(evento.created_at).toLocaleString()}</td>
+        `;
+      }
+
+      eventList.appendChild(table);
+    }
+  </script>
+</body>
+</html>
